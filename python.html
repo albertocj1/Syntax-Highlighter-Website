@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Python Syntax Highlighter — Demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#0f1720; color:#e6eef6; padding:18px; }
+  .editor { width:100%; max-width:900px; margin:0 auto; }
+  pre.code {
+    background: linear-gradient(180deg,#071020,#081322);
+    border-radius:8px;
+    padding:16px;
+    overflow:auto;
+    line-height:1.5;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.6);
+    font-family: "Fira Code", ui-monospace, monospace;
+    font-size:13px;
+    color:#cbd5e1;
+  }
+
+  /* Token styles */
+  .tok-comment { color:#6b7280; font-style:italic; }
+  .tok-keyword { color:#7dd3fc; font-weight:600; }
+  .tok-builtin { color:#f0abfc; }
+  .tok-number { color:#fca5a5; }
+  .tok-string { color:#fde68a; }
+  .tok-function { color:#93c5fd; }
+  .tok-identifier { color:#cbd5e1; }
+  .tok-operator { color:#a3e635; }
+  .tok-punctuation { color:#94a3b8; }
+
+  label { display:block; margin-bottom:8px; font-size:14px; }
+  textarea { width:100%; height:200px; font-family:inherit; font-size:13px; padding:8px; border-radius:6px; border:1px solid #243240; background:#07101a; color:#e6eef6; resize:vertical; }
+  .controls { display:flex; gap:8px; margin:8px 0 12px; align-items:center; }
+  button { background:#0ea5a5; color:#042022; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; }
+  small { color:#9aa6b2; }
+</style>
+</head>
+<body>
+  <div class="editor">
+    <h2>Python Syntax Highlighter — Demo</h2>
+
+    <label for="input">Paste Python code below:</label>
+    <textarea id="input" spellcheck="false"># Fibonacci example
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+nums = [fib(i) for i in range(10)]
+print("Fibonacci:", nums)
+</textarea>
+
+    <div class="controls">
+      <button id="renderBtn">Highlight</button>
+      <button onclick="window.location.href='app.html'">Go to JavaScript</button>
+      <button onclick="window.location.href='java.html'">Go to Java</button>
+      <small>Click “Highlight” or type to see updates.</small>
+    </div>
+
+    <pre class="code" id="output"></pre>
+  </div>
+
+<script>
+const lang = {
+  keywords: [
+    "def","class","if","elif","else","for","while","break","continue","return",
+    "import","from","as","try","except","finally","with","pass","lambda","yield",
+    "and","or","not","in","is","global","nonlocal","assert","del","raise","await","async"
+  ],
+  builtins: [
+    "print","len","range","int","float","str","list","dict","set","tuple","bool",
+    "input","open","enumerate","zip","map","filter","sum","min","max","abs","any","all"
+  ],
+  operators: ['\\+','-','\\*','/','%','==','!=','<=','>=','<','>','=','\\+=','-=','\\*=','/=','//','\\*\\*',':'],
+  punctuation: ['\\(', '\\)', '\\[', '\\]', '\\{', '\\}', ',', '\\.', ';']
+};
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const regex = (() => {
+  const comment = /#.*/y;
+  const strMulti = /("""[\s\S]*?"""|'''[\s\S]*?''')/y;
+  const strSingle = /("([^"\\]|\\.)*"|'([^'\\]|\\.)*')/y;
+  const number = /\b\d+(\.\d+)?\b/y;
+  const ident = /\b[A-Za-z_][A-Za-z0-9_]*\b/y;
+  const op = new RegExp(lang.operators.join('|'), 'y');
+  const punc = new RegExp(lang.punctuation.join('|'), 'y');
+  return { comment, strMulti, strSingle, number, ident, op, punc };
+})();
+
+function highlightCode(src) {
+  let i = 0;
+  const out = [];
+  const len = src.length;
+  while (i < len) {
+    const rest = src.slice(i);
+    let m;
+
+    regex.comment.lastIndex = 0;
+    if ((m = regex.comment.exec(rest))) {
+      out.push(`<span class="tok-comment">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    regex.strMulti.lastIndex = 0;
+    if ((m = regex.strMulti.exec(rest))) {
+      out.push(`<span class="tok-string">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    regex.strSingle.lastIndex = 0;
+    if ((m = regex.strSingle.exec(rest))) {
+      out.push(`<span class="tok-string">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    regex.number.lastIndex = 0;
+    if ((m = regex.number.exec(rest))) {
+      out.push(`<span class="tok-number">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    regex.ident.lastIndex = 0;
+    if ((m = regex.ident.exec(rest))) {
+      const word = m[0];
+      if (lang.keywords.includes(word)) {
+        out.push(`<span class="tok-keyword">${escapeHtml(word)}</span>`);
+      } else if (lang.builtins.includes(word)) {
+        out.push(`<span class="tok-builtin">${escapeHtml(word)}</span>`);
+      } else {
+        const after = rest.slice(word.length);
+        if (/^\s*\(/.test(after)) {
+          out.push(`<span class="tok-function">${escapeHtml(word)}</span>`);
+        } else {
+          out.push(`<span class="tok-identifier">${escapeHtml(word)}</span>`);
+        }
+      }
+      i += word.length;
+      continue;
+    }
+
+    regex.op.lastIndex = 0;
+    if ((m = regex.op.exec(rest))) {
+      out.push(`<span class="tok-operator">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    regex.punc.lastIndex = 0;
+    if ((m = regex.punc.exec(rest))) {
+      out.push(`<span class="tok-punctuation">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    const ch = src[i];
+    out.push(ch === '\n' ? '\n' : escapeHtml(ch));
+    i++;
+  }
+  return out.join('');
+}
+
+const input = document.getElementById('input');
+const output = document.getElementById('output');
+const btn = document.getElementById('renderBtn');
+
+output.innerHTML = highlightCode(input.value);
+btn.addEventListener('click', () => output.innerHTML = highlightCode(input.value));
+
+let timer = null;
+input.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => output.innerHTML = highlightCode(input.value), 250);
+});
+</script>
+</body>
+</html>

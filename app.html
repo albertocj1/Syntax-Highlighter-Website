@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>JavaScript Syntax Highlighter — Demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  /* ---- Theme ---- */
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#0f1720; color:#e6eef6; padding:18px; }
+  .editor { width:100%; max-width:900px; margin:0 auto; }
+  pre.code {
+    background: linear-gradient(180deg,#071020,#081322);
+    border-radius:8px;
+    padding:16px;
+    overflow:auto;
+    line-height:1.5;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.6);
+    font-family: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+    font-size:13px;
+    color: #cbd5e1;
+  }
+
+  /* token styles */
+  .tok-comment { color:#6b7280; font-style:italic; }
+  .tok-keyword { color:#7dd3fc; font-weight:600; }
+  .tok-type { color:#f0abfc; }
+  .tok-number { color:#fca5a5; }
+  .tok-string { color:#fde68a; }
+  .tok-function { color:#93c5fd; }
+  .tok-identifier { color:#cbd5e1; }
+  .tok-operator { color:#a3e635; }
+  .tok-punctuation { color:#94a3b8; }
+
+  /* small UI */
+  label { display:block; margin-bottom:8px; font-size:14px; }
+  textarea { width:100%; height:200px; font-family:inherit; font-size:13px; padding:8px; box-sizing:border-box; border-radius:6px; border:1px solid #243240; background:#07101a; color:#e6eef6; resize:vertical; }
+  .controls { display:flex; flex-wrap: wrap; gap:8px; margin:8px 0 12px; align-items:center; }
+  button { background:#0ea5a5; color:#042022; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; transition: background 0.2s ease; }
+  button:hover { background:#14b8b8; }
+  small { color:#9aa6b2; }
+</style>
+</head>
+<body>
+  <div class="editor">
+    <h2>JavaScript Syntax Highlighter — Demo</h2>
+
+    <label for="input">Paste code below (JavaScript):</label>
+    <textarea id="input" spellcheck="false">// Example
+func fib(n: int) -> int {
+  // base cases
+  if n <= 1 { return n }
+  return fib(n-1) + fib(n-2)
+}
+
+/* multi-line comment
+   with more text */
+var name = "Alice"
+var pi = 3.14159
+</textarea>
+
+    <div class="controls">
+      <button id="renderBtn">Highlight</button>
+      <button onclick="window.location.href='python.html'">Go to Python</button>
+      <button onclick="window.location.href='java.html'">Go to Java</button>
+      <small>Output updates in the panel. You can edit the language tokens in JS below.</small>
+    </div>
+
+    <pre class="code" id="output" aria-live="polite"></pre>
+  </div>
+
+<script>
+/*
+  Simple regex-based highlighter.
+  - Easy to extend: change lists in `lang` object.
+  - Works by tokenizing in order of precedence (comments, strings, numbers, keywords, types, functions, identifiers, operators/punctuation).
+  - Escapes HTML to avoid injection.
+*/
+
+const lang = {
+  keywords: ["if","else","while","for","return","break","continue","func","var","const","true","false","null","->"],
+  types: ["int","float","string","bool","void"],
+  // operators & punctuation are matched last
+  operators: ['\\+','-','\\*','/','%','==','!=','<=','>=','<','>','=','&&','\\|\\|','!'],
+  punctuation: ['\\{','\\}','\\[','\\]','\\(','\\)',',',';',':']
+};
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Build combined regex
+const regex = (() => {
+  const commentMulti = /\/\*[\s\S]*?\*\//y;
+  const commentLine = /\/\/.*/y;
+  const strDouble = /"([^"\\]|\\.)*"/y;
+  const strSingle = /'([^'\\]|\\.)*'/y;
+  const number = /\b\d+(\.\d+)?\b/y;
+  const ident = /\b[A-Za-z_][A-Za-z0-9_]*\b/y;
+  const op = new RegExp(lang.operators.join('|'), 'y');
+  const punc = new RegExp(lang.punctuation.join('|'), 'y');
+  return { commentMulti, commentLine, strDouble, strSingle, number, ident, op, punc };
+})();
+
+function highlightCode(src) {
+  let i = 0;
+  const out = [];
+  const len = src.length;
+
+  while (i < len) {
+    const rest = src.slice(i);
+
+    let m;
+    // multi-line comment
+    regex.commentMulti.lastIndex = 0;
+    if ((m = regex.commentMulti.exec(rest))) {
+      out.push(`<span class="tok-comment">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // single-line comment
+    regex.commentLine.lastIndex = 0;
+    if ((m = regex.commentLine.exec(rest))) {
+      out.push(`<span class="tok-comment">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // double-quoted string
+    regex.strDouble.lastIndex = 0;
+    if ((m = regex.strDouble.exec(rest))) {
+      out.push(`<span class="tok-string">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // single-quoted string
+    regex.strSingle.lastIndex = 0;
+    if ((m = regex.strSingle.exec(rest))) {
+      out.push(`<span class="tok-string">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // number
+    regex.number.lastIndex = 0;
+    if ((m = regex.number.exec(rest))) {
+      out.push(`<span class="tok-number">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // identifier (could be keyword, type, or function name)
+    regex.ident.lastIndex = 0;
+    if ((m = regex.ident.exec(rest))) {
+      const word = m[0];
+      if (lang.keywords.includes(word)) {
+        out.push(`<span class="tok-keyword">${escapeHtml(word)}</span>`);
+      } else if (lang.types.includes(word)) {
+        out.push(`<span class="tok-type">${escapeHtml(word)}</span>`);
+      } else {
+        const after = rest.slice(word.length);
+        if (/^\s*\(/.test(after)) {
+          out.push(`<span class="tok-function">${escapeHtml(word)}</span>`);
+        } else {
+          out.push(`<span class="tok-identifier">${escapeHtml(word)}</span>`);
+        }
+      }
+      i += word.length;
+      continue;
+    }
+
+    // operators
+    regex.op.lastIndex = 0;
+    if ((m = regex.op.exec(rest))) {
+      out.push(`<span class="tok-operator">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    // punctuation
+    regex.punc.lastIndex = 0;
+    if ((m = regex.punc.exec(rest))) {
+      out.push(`<span class="tok-punctuation">${escapeHtml(m[0])}</span>`);
+      i += m[0].length;
+      continue;
+    }
+
+    const ch = src[i];
+    if (ch === '\n') {
+      out.push('\n');
+    } else {
+      out.push(escapeHtml(ch));
+    }
+    i += 1;
+  }
+
+  return out.join('');
+}
+
+// Attach to UI
+const input = document.getElementById('input');
+const output = document.getElementById('output');
+const btn = document.getElementById('renderBtn');
+
+// initial render
+output.innerHTML = highlightCode(input.value);
+
+// re-run highlight on click
+btn.addEventListener('click', () => {
+  output.innerHTML = highlightCode(input.value);
+});
+
+// live highlight debounce
+let timer = null;
+input.addEventListener('input', () => {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    output.innerHTML = highlightCode(input.value);
+  }, 250);
+});
+</script>
+</body>
+</html>
